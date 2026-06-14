@@ -28,13 +28,14 @@ jobs:
         fi
         touch .env
 
+    - name: Make Gradle Wrapper Executable
+      run: chmod +x gradlew
+
     - name: Set up Gradle
       uses: gradle/actions/setup-gradle@v4
-      with:
-        gradle-version: '9.3.1' # Specify compatible Gradle version to handle projects without wrappers
 
     - name: Build with Gradle
-      run: gradle assembleDebug --no-daemon
+      run: ./gradlew assembleDebug --no-daemon
 
     - name: Upload Debug APK Artifact
       uses: actions/upload-artifact@v4
