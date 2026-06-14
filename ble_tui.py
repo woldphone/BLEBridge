@@ -28,6 +28,39 @@ from textual.reactive import reactive
 from rich.text import Text
 from rich.panel import Panel
 
+# --- UUID Resolver ---
+class UUIDResolver:
+    def __init__(self, db_path="uuids.json"):
+        self.services = {}
+        self.characteristics = {}
+        self.profiles = {}
+        try:
+            with open(db_path, "r") as f:
+                db = json.load(f)
+                self.services = db.get("services", {})
+                self.characteristics = db.get("characteristics", {})
+                self.profiles = db.get("profiles", {})
+        except Exception:
+            pass
+
+    def resolve_service(self, uuid):
+        short = self._to_short(uuid)
+        return self.services.get(short, "Unknown Service")
+
+    def resolve_characteristic(self, uuid):
+        short = self._to_short(uuid)
+        return self.characteristics.get(short, "Unknown Char")
+
+    def _to_short(self, uuid):
+        u = uuid.lower()
+        if u.endswith("-0000-1000-8000-00805f9b34fb"):
+            return u[4:8].lstrip('0') if u.startswith('0000') else u[0:8]
+        return u
+
+    def get_profile_commands(self, service_uuid):
+        short = self._to_short(service_uuid)
+        return self.profiles.get(short, None)
+
 # --- Bridge Client ---
 class BleBridgeClient:
     def __init__(self, host, port, on_message_callback):
@@ -178,6 +211,12 @@ class BleTuiApp(App):
     .connecting {
         color: #ffff00;
     }
+
+    #service-list ListItem {
+        height: auto;
+        padding: 1;
+        border-bottom: thin #333;
+    }
     """
 
     BINDINGS = [
@@ -194,6 +233,7 @@ class BleTuiApp(App):
     def __init__(self):
         super().__init__()
         self.client = None
+        self.resolver = UUIDResolver()
         self.discovered_devices = {}
         self.heartbeat_timer = None
         self.last_connected_device = None
@@ -245,7 +285,9 @@ class BleTuiApp(App):
         # Fuzzer tab content
         self.query_one("#tab-fuzzer").mount(
             Vertical(
-                Label("[bold]BUILT-IN COMMANDS[/bold]"),
+                Label("[bold]PROFILE SUGGESTIONS[/bold]"),
+                Horizontal(id="profile-buttons", classes="fuzzer-buttons"),
+                Label("\n[bold]BUILT-IN COMMANDS[/bold]"),
                 Horizontal(
                     Button("AT", id="btn-at"),
                     Button("AT+VERSION", id="btn-version"),
@@ -285,6 +327,10 @@ class BleTuiApp(App):
         self.query_one("#console").write(Text.from_markup(f"[{timestamp}] {message}"))
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id and event.button.id.startswith("prof-"):
+            self.handle_profile_button(event.button)
+            return
+
         if event.button.id == "connect-btn":
             self.handle_bridge_connect()
         elif event.button.id == "scan-btn":
@@ -303,6 +349,26 @@ class BleTuiApp(App):
             self.send_custom(True)
         elif event.button.id == "toggle-heartbeat":
             self.toggle_heartbeat()
+
+    def handle_profile_button(self, button):
+        cmd = getattr(button, 'profile_cmd', None)
+        service = getattr(button, 'profile_service', None)
+        if not cmd or not service: return
+
+        char_short = cmd.get("char")
+        full_char = f"0000{char_short}-0000-1000-8000-00805f9b34fb"
+
+        self.log_to_console(f"[bold magenta]Profile Action:[/bold magenta] {cmd.get('label')}")
+
+        payload = {
+            "command": cmd.get("command"),
+            "service": service,
+            "characteristic": full_char
+        }
+        if "enable" in cmd:
+            payload["enable"] = cmd["enable"]
+
+        self.client.send_command(payload)
 
     def handle_bridge_connect(self):
         if self.client and self.client.running:
@@ -380,16 +446,32 @@ class BleTuiApp(App):
         except: pass
 
         lst = self.query_one("#service-list")
-        lst.clear()
+        lst.query("ListItem").remove()
+
+        profile_box = self.query_one("#profile-buttons")
+        profile_box.query("*").remove()
+
         for s in self.services_data:
             s_uuid = s.get("uuid")
-            header = ListItem(Label(f"[bold blue]Service: {s_uuid}[/bold blue]"))
+            s_name = self.resolver.resolve_service(s_uuid)
+
+            header = ListItem(Label(f"[bold blue]Service: {s_name}[/bold blue] [dim]({s_uuid})[/dim]"))
             header.disabled = True
             lst.append(header)
+
+            profile = self.resolver.get_profile_commands(s_uuid)
+            if profile:
+                for cmd in profile.get("commands", []):
+                    btn = Button(cmd.get("label"), id=f"prof-{cmd.get('char')}")
+                    btn.profile_cmd = cmd
+                    btn.profile_service = s_uuid
+                    profile_box.mount(btn)
+
             for c in s.get("characteristics", []):
                 c_uuid = c.get("uuid")
+                c_name = self.resolver.resolve_characteristic(c_uuid)
                 props = c.get("properties")
-                item = ListItem(Label(f"  [cyan]Char: {c_uuid}[/cyan] ({props})"))
+                item = ListItem(Label(f"  [cyan]Char: {c_name}[/cyan] [dim]({c_uuid})[/dim]\n    [dim]Props: {props}[/dim]"))
                 item.service_uuid = s_uuid
                 item.char_uuid = c_uuid
                 lst.append(item)
@@ -401,7 +483,7 @@ class BleTuiApp(App):
 
         if not self.is_scanning:
             self.discovered_devices = {}
-            self.query_one("#device-list").clear()
+            self.query_one("#device-list").query("ListItem").remove()
             if self.client.send_command({"command": "scan"}):
                 self.is_scanning = True
                 self.query_one("#scan-btn").label = "Stop Scan"
