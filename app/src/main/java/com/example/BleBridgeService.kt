@@ -126,14 +126,22 @@ class BleBridgeService : Service() {
             .setOngoing(true)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop Gateway", stopPendingIntent)
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                NOTIFICATION_ID,
-                notificationBuilder.build(),
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, notificationBuilder.build())
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    notificationBuilder.build(),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, notificationBuilder.build())
+            }
+        } catch (e: Exception) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && e is android.app.ForegroundServiceStartNotAllowedException) {
+                log(LogLevel.LEVEL1, "Foreground service start not allowed: ${e.message}")
+            } else {
+                log(LogLevel.LEVEL1, "Error starting foreground service: ${e.message}")
+            }
         }
     }
 
@@ -423,10 +431,31 @@ class BleBridgeService : Service() {
             }
         }
 
+        override fun onCharacteristicRead(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            value: ByteArray,
+            status: Int
+        ) {
+            handleCharacteristicRead(gatt, characteristic, value, status)
+        }
+
         @Suppress("DEPRECATION")
-        override fun onCharacteristicRead(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
+        override fun onCharacteristicRead(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            status: Int
+        ) {
+            handleCharacteristicRead(gatt, characteristic, characteristic.value ?: byteArrayOf(), status)
+        }
+
+        private fun handleCharacteristicRead(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            value: ByteArray,
+            status: Int
+        ) {
             val ok = (status == BluetoothGatt.GATT_SUCCESS)
-            val value = characteristic.value ?: byteArrayOf()
             log(LogLevel.LEVEL3, "GATT Read Callback -> Status=$status, Size=${value.size}")
 
             if (ok) {
@@ -439,9 +468,27 @@ class BleBridgeService : Service() {
             activeTaskDeferred?.complete(ok)
         }
 
+        override fun onCharacteristicChanged(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            value: ByteArray
+        ) {
+            handleCharacteristicChanged(gatt, characteristic, value)
+        }
+
         @Suppress("DEPRECATION")
-        override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
-            val value = characteristic.value ?: byteArrayOf()
+        override fun onCharacteristicChanged(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic
+        ) {
+            handleCharacteristicChanged(gatt, characteristic, characteristic.value ?: byteArrayOf())
+        }
+
+        private fun handleCharacteristicChanged(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            value: ByteArray
+        ) {
             val sUuid = characteristic.service?.uuid?.toString() ?: ""
             val cUuid = characteristic.uuid?.toString() ?: ""
             log(LogLevel.LEVEL3, "GATT Telemetry Stream Rx from [$cUuid]")
@@ -468,6 +515,15 @@ class BleBridgeService : Service() {
             val ok = (status == BluetoothGatt.GATT_SUCCESS)
             log(LogLevel.LEVEL3, "GATT Descriptor Write Callback -> Status=$status")
             activeTaskDeferred?.complete(ok)
+        }
+
+        override fun onServiceChanged(gatt: BluetoothGatt) {
+            log(LogLevel.LEVEL2, "GATT Service Changed. Rediscovering...")
+            try {
+                gatt.discoverServices()
+            } catch (e: SecurityException) {
+                log(LogLevel.LEVEL1, "Security Exception in discoverServices: ${e.message}")
+            }
         }
     }
 
