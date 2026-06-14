@@ -1,0 +1,6 @@
+{
+  "name": "BLE Bridge",
+  "description": "Resilient BLE-to-Network routing gateway enabling bi-directional peripheral communication with TCP socket clients.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
