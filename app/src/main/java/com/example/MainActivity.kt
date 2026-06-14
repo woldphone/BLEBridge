@@ -475,7 +475,6 @@ fun BleBridgeDashboard() {
             }
 
             if (showInstallDialog) {
-                val installCommand = "curl -L https://raw.githubusercontent.com/woldphone/BLEBridge/main/ble_tui.py -o ble_tui.py && curl -L https://raw.githubusercontent.com/woldphone/BLEBridge/main/uuids.json -o uuids.json"
                 AlertDialog(
                     onDismissRequest = { showInstallDialog = false },
                     title = { Text("Termux Setup") },
@@ -483,35 +482,18 @@ fun BleBridgeDashboard() {
                         Column {
                             Text("Copy and paste this command into Termux to install the BLE Bridge scripts:", fontSize = 14.sp)
                             Spacer(modifier = Modifier.height(12.dp))
-                            SelectionContainer {
-                                Surface(
-                                    color = Color(0xFF1C1B1F),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text(
-                                        text = installCommand,
-                                        color = Color(0xFF00FF00),
-                                        fontFamily = FontFamily.Monospace,
-                                        fontSize = 10.sp,
-                                        modifier = Modifier.padding(12.dp)
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Button(
-                                onClick = {
-                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                    val clip = android.content.ClipData.newPlainText("BLE Bridge Setup", installCommand)
-                                    clipboard.setPrimaryClip(clip)
-                                    Toast.makeText(context, "Command copied to clipboard", Toast.LENGTH_SHORT).show()
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD6E2FF), contentColor = Color(0xFF001A40))
+                            Surface(
+                                color = Color(0xFF1C1B1F),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("COPY TO CLIPBOARD")
+                                Text(
+                                    text = "curl -L https://raw.githubusercontent.com/woldphone/BLEBridge/main/ble_tui.py -o ble_tui.py && curl -L https://raw.githubusercontent.com/woldphone/BLEBridge/main/uuids.json -o uuids.json",
+                                    color = Color(0xFF00FF00),
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 10.sp,
+                                    modifier = Modifier.padding(12.dp)
+                                )
                             }
                         }
                     },

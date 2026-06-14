@@ -198,13 +198,13 @@ class BleTuiApp(App):
     }
 
     #main-content {
-        width: 1fr;
+        flex-grow: 1;
     }
 
     .device-item-row {
         padding: 0 1;
         height: 2;
-        border-bottom: solid #333;
+        border-bottom: thin #333;
     }
 
     .rssi {
@@ -250,7 +250,7 @@ class BleTuiApp(App):
     #service-list ListItem {
         height: auto;
         padding: 1;
-        border-bottom: solid #333;
+        border-bottom: thin #333;
     }
     """
 
