@@ -251,12 +251,29 @@ class BleBridgeService : Service() {
                 val address = device.address
                 val rssi = result.rssi
 
+                // Enhanced device type detection
+                var deviceType = "Generic BLE"
+                result.scanRecord?.let { record ->
+                    val manufacturerData = record.manufacturerSpecificData
+                    if (manufacturerData.size() > 0) {
+                        val firstKey = manufacturerData.keyAt(0)
+                        deviceType = when (firstKey) {
+                            0x004C -> "Apple Device"
+                            0x0006 -> "Microsoft/Windows"
+                            0x0075 -> "Samsung"
+                            0x00E0 -> "Google/Android"
+                            else -> "Manufacturer ID: 0x${Integer.toHexString(firstKey).uppercase()}"
+                        }
+                    }
+                }
+
                 val payload = JSONObject().apply {
                     put("status", "scan_result")
                     put("timestamp", System.currentTimeMillis())
                     put("device_name", name)
                     put("device_address", address)
                     put("rssi", rssi)
+                    put("device_type", deviceType)
                 }
                 broadcastJson(payload.toString())
                 log(LogLevel.LEVEL3, "Scan Result -> Name: $name, Addr: $address, RSSI: $rssi")
@@ -418,7 +435,32 @@ class BleBridgeService : Service() {
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 log(LogLevel.LEVEL2, "BLE GATT services discovered successfully!")
-                // Dump telemetry
+
+                val servicesArray = org.json.JSONArray()
+                gatt.services.forEach { service ->
+                    val sObj = JSONObject()
+                    sObj.put("uuid", service.uuid.toString())
+
+                    val charsArray = org.json.JSONArray()
+                    service.characteristics.forEach { char ->
+                        val cObj = JSONObject()
+                        cObj.put("uuid", char.uuid.toString())
+                        cObj.put("properties", getCharPropertiesString(char.properties))
+                        charsArray.put(cObj)
+                    }
+                    sObj.put("characteristics", charsArray)
+                    servicesArray.put(sObj)
+                }
+
+                val payload = JSONObject().apply {
+                    put("status", "services_discovered")
+                    put("timestamp", System.currentTimeMillis())
+                    put("device", gatt.device.address)
+                    put("services", servicesArray)
+                }
+                broadcastJson(payload.toString())
+
+                // Dump telemetry to logs
                 gatt.services.forEach { service ->
                     log(LogLevel.LEVEL3, "Service: ${service.uuid}")
                     service.characteristics.forEach { char ->
@@ -428,6 +470,7 @@ class BleBridgeService : Service() {
                 }
             } else {
                 log(LogLevel.LEVEL1, "Service discovery failed with status $status")
+                broadcastJson(errorResponse("Service discovery failed with status $status"))
             }
         }
 
@@ -718,6 +761,32 @@ class BleBridgeService : Service() {
                     }
                 }
                 "reset_bluetooth" -> resetBluetoothDevice(client)
+                "ping" -> client.send(JSONObject().apply {
+                    put("status", "pong")
+                    put("timestamp", System.currentTimeMillis())
+                }.toString())
+                "request_mtu" -> {
+                    val mtu = json.optInt("mtu", 512)
+                    requestMtuInline(mtu, client)
+                }
+                "discover" -> {
+                    val g = bluetoothGatt
+                    if (g == null || companionBleState != Companion.BleConnectionState.CONNECTED) {
+                        client.send(errorResponse("BLE peripheral is currently not connected"))
+                    } else {
+                        log(LogLevel.LEVEL2, "Manual service discovery requested.")
+                        try {
+                            g.discoverServices()
+                            client.send(JSONObject().apply {
+                                put("status", "command_success")
+                                put("command", "discover")
+                                put("timestamp", System.currentTimeMillis())
+                            }.toString())
+                        } catch (e: SecurityException) {
+                            client.send(errorResponse("Security Exception: Bluetooth connect permission missing"))
+                        }
+                    }
+                }
                 else -> client.send(errorResponse("Unrecognized command parameter: $command"))
             }
         } catch (e: JSONException) {
@@ -865,6 +934,30 @@ class BleBridgeService : Service() {
             put("timestamp", System.currentTimeMillis())
             put("message", "Bluetooth GATT adapters/handles closed cleanly.")
         }.toString())
+    }
+
+    private fun requestMtuInline(mtu: Int, client: ClientHandler) {
+        val g = bluetoothGatt
+        if (g == null || companionBleState != Companion.BleConnectionState.CONNECTED) {
+            client.send(errorResponse("BLE peripheral is currently not connected"))
+            return
+        }
+        try {
+            log(LogLevel.LEVEL2, "Requesting hardware MTU of $mtu...")
+            val ok = g.requestMtu(mtu)
+            if (ok) {
+                client.send(JSONObject().apply {
+                    put("status", "command_success")
+                    put("command", "request_mtu")
+                    put("mtu", mtu)
+                    put("timestamp", System.currentTimeMillis())
+                }.toString())
+            } else {
+                client.send(errorResponse("MTU request could not be pre-scheduled."))
+            }
+        } catch (e: SecurityException) {
+            client.send(errorResponse("Security Exception: Bluetooth connect permission missing"))
+        }
     }
 
     // --- Static state mappings & UI contracts ---
