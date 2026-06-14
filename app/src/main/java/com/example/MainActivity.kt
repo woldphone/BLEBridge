@@ -76,9 +76,11 @@ fun BleBridgeDashboard() {
     val bleAddress by BleBridgeService.bleDeviceAddress.collectAsStateWithLifecycle()
     val currentLogLevel by BleBridgeService.logLevel.collectAsStateWithLifecycle()
     val logs by BleBridgeService.logs.collectAsStateWithLifecycle()
+    val updateAvailable by BleBridgeService.updateAvailable.collectAsStateWithLifecycle()
 
     var portInput by remember { mutableStateOf(serverPort.toString()) }
     var dropdownExpanded by remember { mutableStateOf(false) }
+    var showInstallDialog by remember { mutableStateOf(false) }
 
     // Sync input field when configuration state changes externally
     LaunchedEffect(serverPort) {
@@ -124,6 +126,7 @@ fun BleBridgeDashboard() {
         } else {
             permissionsGranted = true
         }
+        BleBridgeService.checkForUpdates()
     }
 
     Scaffold(
@@ -150,13 +153,24 @@ fun BleBridgeDashboard() {
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
-                            Text(
-                                text = "BLE Bridge",
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF1A1C1E),
-                                fontSize = 18.sp,
-                                fontFamily = FontFamily.SansSerif
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "BLE Bridge",
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF1A1C1E),
+                                    fontSize = 18.sp,
+                                    fontFamily = FontFamily.SansSerif
+                                )
+                                if (updateAvailable) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .clip(RoundedCornerShape(50))
+                                            .background(Color(0xFFBA1A1A))
+                                    )
+                                }
+                            }
                             Text(
                                 text = if (isRunning) "SERVICE ACTIVE" else "SERVICE INACTIVE",
                                 fontWeight = FontWeight.Bold,
@@ -164,6 +178,16 @@ fun BleBridgeDashboard() {
                                 fontSize = 10.sp,
                                 letterSpacing = 1.sp
                             )
+                        }
+                    }
+                },
+                actions = {
+                    if (updateAvailable) {
+                        IconButton(onClick = {
+                            val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/woldphone/BLEBridge/releases/latest"))
+                            context.startActivity(intent)
+                        }) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Update Available", tint = Color(0xFFBA1A1A))
                         }
                     }
                 },
@@ -432,7 +456,51 @@ fun BleBridgeDashboard() {
                             }
                         }
                     }
+
+                    HorizontalDivider(color = Color(0xFFE1E2EC))
+
+                    Button(
+                        onClick = { showInstallDialog = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD6E2FF), contentColor = Color(0xFF001A40)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Setup Python Tools", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
                 }
+            }
+
+            if (showInstallDialog) {
+                AlertDialog(
+                    onDismissRequest = { showInstallDialog = false },
+                    title = { Text("Termux Setup") },
+                    text = {
+                        Column {
+                            Text("Copy and paste this command into Termux to install the BLE Bridge scripts:", fontSize = 14.sp)
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Surface(
+                                color = Color(0xFF1C1B1F),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = "curl -L https://raw.githubusercontent.com/woldphone/BLEBridge/main/ble_tui.py -o ble_tui.py && curl -L https://raw.githubusercontent.com/woldphone/BLEBridge/main/uuids.json -o uuids.json",
+                                    color = Color(0xFF00FF00),
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 10.sp,
+                                    modifier = Modifier.padding(12.dp)
+                                )
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showInstallDialog = false }) {
+                            Text("DONE")
+                        }
+                    }
+                )
             }
 
             // --- Connected Clients (Terminal) Section ---

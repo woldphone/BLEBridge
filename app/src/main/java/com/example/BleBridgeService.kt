@@ -1010,6 +1010,32 @@ class BleBridgeService : Service() {
         private val _logs = MutableStateFlow<List<LogMessage>>(emptyList())
         val logs: StateFlow<List<LogMessage>> = _logs.asStateFlow()
 
+        private val _updateAvailable = MutableStateFlow(false)
+        val updateAvailable: StateFlow<Boolean> = _updateAvailable.asStateFlow()
+
+        fun checkForUpdates() {
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val client = okhttp3.OkHttpClient()
+                    val request = okhttp3.Request.Builder()
+                        .url("https://raw.githubusercontent.com/woldphone/BLEBridge/main/version.json")
+                        .build()
+
+                    val response = client.newCall(request).execute()
+                    if (response.isSuccessful) {
+                        val body = response.body?.string() ?: ""
+                        val json = JSONObject(body)
+                        val remoteVersionCode = json.optInt("versionCode", 0)
+
+                        // Current version is 1 (as defined in app/build.gradle.kts)
+                        if (remoteVersionCode > 1) {
+                            _updateAvailable.value = true
+                        }
+                    }
+                } catch (e: Exception) {}
+            }
+        }
+
         fun setLogLevel(level: LogLevel) {
             _logLevel.value = level
             updateLogsFlow()
