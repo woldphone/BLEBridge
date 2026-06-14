@@ -187,7 +187,6 @@ class BleTuiApp(App):
         background: #000;
         border-top: solid #333;
         color: #00ff00;
-        font-family: 'Courier New', Courier, monospace;
     }
 
     #status-bar {
