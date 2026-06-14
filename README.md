@@ -48,9 +48,35 @@ The application declares and handles the modern dynamic Android permission group
 
 ---
 
-## 💻 Working Example: Control via Netcat (Termux)
+## 💻 Pro Python TUI (Termux)
 
-Start editing, reading, or auditing sensors directly from the command line on your device!
+The BLE Bridge now includes a professional-grade Terminal User Interface (TUI) application designed for high-performance BLE auditing and control directly from Termux.
+
+### 🌟 Key Features
+- **Modern Dashboard**: A responsive, color-coded interface built with the Textual framework.
+- **Intelligent UUID Resolution**: Automatically resolves GATT UUIDs to human-readable names (e.g., "Battery Level") using a built-in database.
+- **Profile Suggestions**: Context-aware buttons (e.g., "Start Heart Rate Stream") appear automatically when standard services are discovered.
+- **Advanced Fuzzer**: Send ASCII or Hex payloads with configurable line endings (CRLF, LF, CR) and built-in shortcuts for common commands.
+- **Connection Resiliency**:
+    - **Pulse Mode**: Automated heartbeats to keep sensitive connections alive.
+    - **Auto-MTU**: Automatically negotiates 512-byte packets upon connection.
+- **Zero-Config Setup**: Self-bootstraps and updates its own dependencies (`textual`, `rich`, `requests`) on launch.
+
+### 🚀 Quick Start in Termux
+1. Launch the **BLE Bridge** Android app and toggle the server **ON**.
+2. Tap **Setup Python Tools** in the app and copy the installation command.
+3. Paste it into Termux or run:
+   ```bash
+   curl -L https://raw.githubusercontent.com/woldphone/BLEBridge/main/ble_tui.py -o ble_tui.py && \
+   curl -L https://raw.githubusercontent.com/woldphone/BLEBridge/main/uuids.json -o uuids.json && \
+   python3 ble_tui.py
+   ```
+
+---
+
+## 🛠️ Low-Level Control via Netcat (Termux)
+
+For minimalists, you can still edit, read, or audit sensors directly from the command line:
 
 ### 1. Start a BLE Scanner
 Query surrounding devices to retrieve target MAC addresses:
