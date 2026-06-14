@@ -21,6 +21,12 @@ jobs:
         java-version: '21'
         distribution: 'temurin'
 
+    # ISSUE FIX: The Gradle Wrapper validation was failing because the gradle-wrapper.jar
+    # had an unknown hash. This step uses gradle/wrapper-validation-action to ensure the
+    # wrapper is valid before proceeding. If it fails, the wrapper JAR needs to be regenerated.
+    - name: Validate Gradle Wrapper
+      uses: gradle/wrapper-validation-action@v2
+
     - name: Decode Debug Keystore
       run: |
         if [ -f debug.keystore.base64 ]; then
@@ -31,10 +37,11 @@ jobs:
     - name: Make Gradle Wrapper Executable
       run: chmod +x gradlew
 
-    - name: Set up Gradle
-      uses: gradle/actions/setup-gradle@v4
+    # ISSUE FIX: Removed the problematic 'gradle/actions/setup-gradle@v4' step that was
+    # performing its own validation and conflicting with our explicit wrapper validation.
+    # The gradle wrapper itself handles setup when invoked via ./gradlew
 
-    - name: Build with Gradle
+    - name: Build Debug APK with Gradle
       run: ./gradlew assembleDebug --no-daemon
 
     - name: Upload Debug APK Artifact
